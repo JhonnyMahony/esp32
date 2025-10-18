@@ -3,9 +3,14 @@ use std::{
     time::Duration,
 };
 
+use esp_idf_svc::hal::units::Hertz;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
-    hal::{gpio::PinDriver, prelude::Peripherals},
+    hal::{
+        gpio::PinDriver,
+        ledc::{config::TimerConfig, LedcDriver, LedcTimerDriver},
+        prelude::Peripherals,
+    },
     http::{self, server::EspHttpServer},
     nvs::EspDefaultNvsPartition,
     timer::EspTaskTimerService,
@@ -13,6 +18,8 @@ use esp_idf_svc::{
 
 use crate::wifi::wifi;
 
+//mod led;
+mod servo;
 mod wifi;
 
 fn main() {
@@ -32,17 +39,7 @@ fn main() {
     let _wifi = wifi(peripherals.modem, sysloop, nvs, timer_service);
 
     let mut server = EspHttpServer::new(&Default::default()).unwrap();
-    let led_pin = Arc::new(Mutex::new(
-        PinDriver::output(peripherals.pins.gpio1).unwrap(),
-    ));
-    server
-        .fn_handler("/", http::Method::Get, move |req| {
-            let mut response = req.into_ok_response().unwrap();
-            response.write("Hello from Esp32".as_bytes()).unwrap();
-            led_pin.lock().unwrap().toggle().unwrap();
-            Ok::<(), ()>(())
-        })
-        .unwrap();
+    servo::servo_entry(&mut server, peripherals.ledc, peripherals.pins).unwrap();
     loop {
         std::thread::sleep(Duration::from_secs(1));
     }
